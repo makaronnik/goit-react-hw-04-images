@@ -1,46 +1,51 @@
-import { Component } from 'react';
+import { useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 import ModalStyled from './ModalStyled';
 
-export default class Modal extends Component {
-  componentDidMount() {
-    window.addEventListener('keydown', this.handleKeyDown);
-  }
+const Modal = ({ image: { largeImageURL, tags }, toggleModal }) => {
+  const handleKeyDown = useCallback(
+    e => {
+      if (e.code === 'Escape') {
+        toggleModal(null);
+      }
+    },
+    [toggleModal]
+  );
 
-  componentWillUnmount() {
-    window.removeEventListener('keydown', this.handleKeyDown);
-  }
-  propTypes = {
-    image: PropTypes.shape({
-      largeImageURL: PropTypes.string.isRequired,
-      tags: PropTypes.string.isRequired,
-    }),
-    toggleModal: PropTypes.func.isRequired,
-  };
+  const handleClick = useCallback(
+    e => {
+      if (e.target.nodeName !== 'IMG') {
+        toggleModal(null);
+      }
+    },
+    [toggleModal]
+  );
 
-  handleKeyDown = e => {
-    if (e.code === 'Escape') {
-      this.props.toggleModal(null);
-    }
-  };
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
 
-  handleClick = e => {
-    if (e.target.nodeName !== 'IMG') {
-      this.props.toggleModal(null);
-    }
-  };
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
 
-  render() {
-    const { largeImageURL, tags } = this.props.image;
+  return createPortal(
+    <ModalStyled onClick={handleClick}>
+      <div className="modal">
+        <img src={largeImageURL} alt={tags} />
+      </div>
+    </ModalStyled>,
+    document.getElementById('modal-root')
+  );
+};
 
-    return createPortal(
-      <ModalStyled onClick={this.handleClick}>
-        <div className="modal">
-          <img src={largeImageURL} alt={tags} />
-        </div>
-      </ModalStyled>,
-      document.getElementById('modal-root')
-    );
-  }
-}
+Modal.propTypes = {
+  image: PropTypes.shape({
+    largeImageURL: PropTypes.string.isRequired,
+    tags: PropTypes.string.isRequired,
+  }),
+  toggleModal: PropTypes.func.isRequired,
+};
+
+export default Modal;

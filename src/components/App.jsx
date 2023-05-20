@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import AppStyled from './AppStyled';
@@ -7,122 +7,96 @@ import Pixabay from '../api/Pixabay';
 import Loader from './Loader/Loader';
 import ImageGallery from './ImageGallery/ImageGallery';
 import Button from './Button/Button';
-import Modal from './Modal/Modal';
 
-export class App extends Component {
-  state = {
-    searchQuery: '',
-    images: [],
-    total: 0,
-    page: 1,
-    isLoading: false,
-    modalImgId: null,
-  };
+const App = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
 
-  componentDidUpdate(_, prevState) {
-    if (
-      this.state.searchQuery !== '' &&
-      (prevState.searchQuery !== this.state.searchQuery ||
-        prevState.page !== this.state.page)
-    ) {
-      this.fetchImages();
+  useEffect(() => {
+    if (searchQuery === '') {
+      return;
     }
 
-    if (
-      prevState.images.length !== 0 &&
-      this.state.images.length > prevState.images.length
-    ) {
-      this.scrollDown();
-    }
-  }
+    const fetchImages = async () => {
+      const api = new Pixabay();
 
-  onSubmit = searchQuery => {
-    searchQuery = searchQuery.trim();
+      setIsLoading(true);
 
-    this.setState({ searchQuery, page: 1, images: [], total: 0 });
-  };
+      try {
+        const response = await api.getImages(searchQuery, page);
+        const newImages = response.data.hits;
+        const newTotal = response.data.total;
 
-  onLoadMore = () => {
-    this.setState(prevState => ({ page: prevState.page + 1 }));
-  };
+        if (!newImages.length) {
+          toast.error(page === 1 ? 'No images found' : 'No more images');
 
-  toggleModal = imgId => {
-    this.setState({ modalImgId: imgId });
-  };
+          return;
+        }
 
-  fetchImages = async () => {
-    const api = new Pixabay();
-    const { searchQuery, page } = this.state;
+        if (page === 1) {
+          toast.success(`${newTotal} images were found`);
+        }
 
-    this.setState({ isLoading: true });
-
-    try {
-      const response = await api.getImages(searchQuery, page);
-      const images = response.data.hits;
-      const total = response.data.total;
-
-      if (!images.length) {
-        toast.error(
-          this.state.images.length ? 'No more images' : 'No images found'
-        );
-
-        return;
-      }
-
-      if (page === 1) {
-        toast.success(`${total} images were found`);
-      }
-
-      this.setState(prevState => ({
-        images: [
-          ...prevState.images,
-          ...images.map(({ id, webformatURL, largeImageURL, tags }) => ({
+        setImages(prevState => [
+          ...prevState,
+          ...newImages.map(({ id, webformatURL, largeImageURL, tags }) => ({
             id,
             webformatURL,
             largeImageURL,
             tags,
           })),
-        ],
-        total,
-      }));
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      this.setState({ isLoading: false });
-    }
-  };
+        ]);
 
-  scrollDown = () => {
+        setTotal(newTotal);
+      } catch (error) {
+        toast.error(error.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchImages();
+  }, [searchQuery, page]);
+
+  useEffect(() => {
+    if (images.length === 0) {
+      return;
+    }
+
     window.scrollTo({
       top: document.documentElement.scrollHeight,
       behavior: 'smooth',
     });
+  }, [images]);
+
+  const onSubmit = newSearchQuery => {
+    if (searchQuery === newSearchQuery.trim()) {
+      return;
+    }
+
+    setSearchQuery(newSearchQuery.trim());
+    setPage(1);
+    setImages([]);
+    setTotal(0);
   };
 
-  render() {
-    const { images, isLoading, modalImgId, total } = this.state;
+  return (
+    <AppStyled>
+      <Searchbar onSubmit={onSubmit} />
+      {images.length > 0 && <ImageGallery images={images} />}
+      {isLoading && <Loader />}
+      {images.length > 0 && !isLoading && images.length < total && (
+        <Button onLoadMore={() => setPage(prevState => prevState + 1)} />
+      )}
+      {createPortal(
+        <Toaster position="top-right" />,
+        document.getElementById('toaster-root')
+      )}
+    </AppStyled>
+  );
+};
 
-    return (
-      <AppStyled>
-        <Searchbar onSubmit={this.onSubmit} />
-        {images.length > 0 && (
-          <ImageGallery images={images} toggleModal={this.toggleModal} />
-        )}
-        {isLoading && <Loader />}
-        {images.length > 0 && !isLoading && images.length < total && (
-          <Button onLoadMore={this.onLoadMore} />
-        )}
-        {modalImgId && (
-          <Modal
-            image={images.find(image => image.id === modalImgId)}
-            toggleModal={() => this.toggleModal(null)}
-          />
-        )}
-        {createPortal(
-          <Toaster position="top-right" />,
-          document.getElementById('toaster-root')
-        )}
-      </AppStyled>
-    );
-  }
-}
+export default App;
